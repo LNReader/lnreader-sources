@@ -4,23 +4,22 @@ import { defaultCover } from '@libs/defaultCover';
 import { fetchApi, fetchFile } from '@libs/fetch';
 import { NovelStatus } from '@libs/novelStatus';
 import { load as parseHTML } from 'cheerio';
+import { storage } from '@libs/storage';
 import dayjs from 'dayjs';
-
-const apiUrl = 'https://api.author.today/';
-const token = 'Bearer guest';
 
 class AuthorToday implements Plugin.PluginBase {
   id = 'AT';
   name = 'Автор Тудей';
   icon = 'src/ru/authortoday/icon.png';
   site = 'https://author.today';
+  apiUrl = 'https://api.author.today/';
   version = '1.0.0';
 
   async popularNovels(
     pageNo: number,
     { showLatestNovels, filters }: Plugin.PopularNovelsOptions,
   ): Promise<Plugin.NovelItem[]> {
-    let url = apiUrl + 'v1/catalog/search?page=' + pageNo;
+    let url = this.apiUrl + 'v1/catalog/search?page=' + pageNo;
     if (filters?.genre?.value) {
       url += '&genre=' + filters.genre.value;
     }
@@ -35,19 +34,18 @@ class AuthorToday implements Plugin.PluginBase {
     url += '&access=' + (filters?.access?.value || 'any');
     url += '&promo=' + (filters?.promo?.value || 'hide');
 
-    const result = await fetchApi(url, {
+    const result: response = await fetchApi(url, {
       headers: {
-        Authorization: token,
+        Authorization: 'Bearer guest',
       },
-    });
-    const json = (await result.json()) as response;
+    }).then(res => res.json());
     const novels: Plugin.NovelItem[] = [];
 
-    if (json.code === 'NotFound') {
+    if (result.code === 'NotFound') {
       return novels;
     }
 
-    json?.searchResults?.forEach(novel =>
+    result?.searchResults?.forEach(novel =>
       novels.push({
         name: novel.title,
         cover: novel.coverUrl
@@ -61,13 +59,19 @@ class AuthorToday implements Plugin.PluginBase {
   }
 
   async parseNovel(workID: string): Promise<Plugin.SourceNovel> {
-    const result = await fetchApi(`${apiUrl}v1/work/${workID}/details`, {
-      headers: {
-        Authorization: token,
+    if (!this.user) this.user = await this.getUser();
+    const book: responseBook = await fetchApi(
+      this.apiUrl + 'v1/work/' + workID + '/details',
+      {
+        headers: {
+          Authorization: 'Bearer ' + this.user?.token || 'guest',
+        },
       },
-    });
+    ).then(res => res.json());
 
-    const book = (await result.json()) as responseBook;
+    if (book.message) {
+      storage.delete(this.id, 'user');
+    }
     const novel: Plugin.SourceNovel = {
       path: workID,
       name: book.title,
@@ -91,15 +95,16 @@ class AuthorToday implements Plugin.PluginBase {
       novel.summary += 'Примечания автора:\n' + book.authorNotes;
     }
 
-    const chaptersRaw = await fetchApi(`${apiUrl}v1/work/${workID}/content`, {
-      headers: {
-        Authorization: token,
+    const chaptersJSON: ChaptersEntity[] = await fetchApi(
+      this.apiUrl + 'v1/work/' + workID + '/content',
+      {
+        headers: {
+          Authorization: 'Bearer ' + this.user?.token || 'guest',
+        },
       },
-    });
+    ).then(res => res.json());
 
-    const chaptersJSON = (await chaptersRaw.json()) as ChaptersEntity[];
     const chapters: Plugin.ChapterItem[] = [];
-
     chaptersJSON.forEach((chapter, chapterIndex) => {
       if (chapter.isAvailable && !chapter.isDraft) {
         chapters.push({
@@ -119,26 +124,32 @@ class AuthorToday implements Plugin.PluginBase {
 
   async parseChapter(chapterPath: string): Promise<string> {
     const [workID, chapterID] = chapterPath.split('/');
-    const result = await fetchApi(
-      apiUrl + `v1/work/${workID}/chapter/${chapterID}/text`,
+    if (!this.user) this.user = await this.getUser();
+    const result: encryptedСhapter = await fetchApi(
+      this.apiUrl + `v1/work/${workID}/chapter/${chapterID}/text`,
       {
         headers: {
-          Authorization: token,
+          Authorization: 'Bearer ' + this.user?.token || 'guest',
         },
       },
-    );
-    const json = (await result.json()) as encryptedСhapter;
+    ).then(res => res.json());
 
-    if (json.code) {
-      return json.code + '\n' + json?.message;
+    if (result.message) {
+      storage.delete(this.id, 'user');
+    }
+    if (result.code) {
+      return result.code + '\n' + result?.message;
     }
 
-    const key = json.key.split('').reverse().join('') + '@_@';
+    const key =
+      result.key.split('').reverse().join('') +
+      '@_@' +
+      (this.user?.userId || '');
     let text = '';
 
-    for (let i = 0; i < json.text.length; i++) {
+    for (let i = 0; i < result.text.length; i++) {
       text += String.fromCharCode(
-        json.text.charCodeAt(i) ^ key.charCodeAt(Math.floor(i % key.length)),
+        result.text.charCodeAt(i) ^ key.charCodeAt(Math.floor(i % key.length)),
       );
     }
 
@@ -183,6 +194,27 @@ class AuthorToday implements Plugin.PluginBase {
   fetchImage = fetchFile;
   resolveUrl = (path: string, isNovel?: boolean) =>
     isNovel ? this.site + '/work/' + path : this.site + '/reader/' + path;
+
+  user: authorization | undefined;
+  getUser = async () => {
+    const user = storage.get(this.id, 'user') || { userId: '', token: 'guest' };
+
+    if (user && user.userId && user.token) return user;
+    const result = await fetchApi(this.site + '/account/bearer-token');
+    if (result.url.includes('Login?ReturnUrl=')) {
+      return user; //It looks like the user has lost the session
+    }
+    return user; //user is not authorized, guest account is used
+
+    const loginUser: authorization = await result.json();
+    storage.set(
+      this.id,
+      'user',
+      loginUser, //for some reason they're ending an hour early.
+      new Date(loginUser.expires).getTime() - 1 * 60 * 60 * 1000,
+    );
+    return loginUser; //user authorized successfully
+  };
 
   filters = {
     sort: {
@@ -333,6 +365,13 @@ class AuthorToday implements Plugin.PluginBase {
 
 export default new AuthorToday();
 
+interface authorization {
+  userId: number;
+  token: string;
+  issued: string;
+  expires: string;
+}
+
 interface response {
   searchResults?: SearchResultsEntity[] | null;
   realTotalCount: number;
@@ -400,6 +439,7 @@ interface Duration {
 }
 
 interface responseBook {
+  message?: string;
   chapters?: ChaptersEntity[] | null;
   allowDownloads: boolean;
   downloadErrorCode: string;

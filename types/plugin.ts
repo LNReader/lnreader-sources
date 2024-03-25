@@ -67,6 +67,9 @@ export namespace Plugin {
     site: string;
     filters?: Filters;
     version: string;
+    //flag indicates whether access to LocalStorage, SesesionStorage is required.
+    webStorageUtilized?: boolean;
+
     popularNovels(
       pageNo: number,
       options: PopularNovelsOptions<Filters>,
