@@ -11,6 +11,8 @@ const includesAny = (str: string, keywords: string[]) =>
 
 interface MadaraOptions {
   useNewChapterEndpoint?: boolean;
+  down?: boolean;
+  downSince?: string;
   lang?: string;
   orderBy?: string;
   versionIncrements?: number;
@@ -69,7 +71,12 @@ class MadaraPlugin implements Plugin.PluginBase {
               : letter;
           })
           .join('');
-        $el.html($el.html()?.replace($el.text(), reversedLetters).replace('\n', '<br>') || '');
+        $el.html(
+          $el
+            .html()
+            ?.replace($el.text(), reversedLetters)
+            .replace('\n', '<br>') || '',
+        );
       });
     }
     return text;

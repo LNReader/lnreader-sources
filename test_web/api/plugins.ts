@@ -19,9 +19,7 @@ export const all_plugins = (): PluginList => {
     res[languageEnglish] = [];
     plugins.forEach(plugin => {
       if (plugin.startsWith('.')) return;
-      const requirePath = `@plugins/${languageEnglish.toLowerCase()}/${
-        plugin.split('.')[0]
-      }`;
+      const requirePath = `@plugins/${languageEnglish.toLowerCase()}/${plugin.replace('.js', '')}`;
       const instance = require(requirePath).default;
       const { id, name, version, icon } = instance;
       const info: Plugin.PluginItem = {

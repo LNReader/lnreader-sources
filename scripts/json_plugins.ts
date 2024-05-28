@@ -41,6 +41,7 @@ interface HostedPluginItem {
   version: string;
   url: string;
   iconUrl: string;
+  down: boolean;
 }
 
 for (let language in languages) {
@@ -52,7 +53,7 @@ for (let language in languages) {
     if (plugin.startsWith('.')) return;
     minify(path.join(langPath, plugin));
     const instance: Plugin.PluginBase = require(
-      `../plugins/${language.toLowerCase()}/${plugin.split('.')[0]}`,
+      `../plugins/${language.toLowerCase()}/${plugin.replace('.js', '')}`,
     ).default;
 
     const { id, name, site, version, icon } = instance;
@@ -66,6 +67,7 @@ for (let language in languages) {
       version,
       url: `${PLUGIN_LINK}/${language.toLowerCase()}/${plugin}`,
       iconUrl: `${ICON_LINK}/${icon || 'siteNotAvailable.png'}`,
+      down: plugin.endsWith('.down.js'),
     };
 
     if (pluginSet.has(id)) {
