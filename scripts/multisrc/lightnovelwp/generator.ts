@@ -12,7 +12,15 @@ export const generateAll: ScrpitGeneratorFunction = function (name) {
       source.filters = filters.filters;
     } catch (e) {}
     console.log(
-      `[${name}] Generating: ${source.id}${' '.repeat(20 - source.id.length)} ${source.filters ? '🔎with filters🔍' : '🚫no filters🚫'}`,
+      `[${name}]`,
+      'Generating:',
+      source.id.padEnd(20),
+      source.options?.down
+        ? '🔽site is down🔽'
+        : source.filters
+          ? '🔎with filters🔍'
+          : '🚫 no filters 🚫',
+      source.options?.downSince ? `since: ${source.options?.downSince}` : '',
     );
     return generator(source);
   });
@@ -39,5 +47,6 @@ export default plugin;
     lang: source.options?.lang || 'English',
     filename: source.sourceName,
     pluginScript,
+    down: source.options?.down || false,
   };
 };

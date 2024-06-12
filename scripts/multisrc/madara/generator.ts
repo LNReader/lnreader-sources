@@ -13,7 +13,17 @@ export const generateAll: ScrpitGeneratorFunction = function (name) {
       metadata.filters = filters.filters;
     } catch (e) {}
     console.log(
-      `[${name}] Generating: ${metadata.id}${' '.repeat(20 - metadata.id.length)} ${metadata.filters ? '🔎with filters🔍' : '🚫no filters🚫'}`,
+      `[${name}]`,
+      'Generating:',
+      metadata.id.padEnd(20),
+      metadata.options?.down
+        ? '🔽site is down🔽'
+        : metadata.filters
+          ? '🔎with filters🔍'
+          : '🚫 no filters 🚫',
+      metadata.options?.downSince
+        ? `since: ${metadata.options?.downSince}`
+        : '',
     );
     return generator(metadata);
   });
@@ -33,5 +43,6 @@ export default plugin;
     lang: metadata.options?.lang || 'English',
     filename: metadata.sourceName,
     pluginScript,
+    down: metadata.options?.down,
   };
 };
